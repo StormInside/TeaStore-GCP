@@ -13,6 +13,10 @@
  */
 package tools.descartes.teastore.webui.startup;
 
+import com.google.cloud.opentelemetry.trace.TraceExporter;
+import io.opentelemetry.sdk.OpenTelemetrySdk;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 import jakarta.servlet.annotation.WebListener;
@@ -22,6 +26,8 @@ import tools.descartes.teastore.registryclient.RegistryClient;
 import tools.descartes.teastore.registryclient.Service;
 import tools.descartes.teastore.registryclient.loadbalancers.ServiceLoadBalancer;
 import tools.descartes.teastore.registryclient.tracing.Tracing;
+
+import java.io.IOException;
 
 /**
  * Application Lifecycle Listener implementation class Registry Client Startup.
@@ -50,8 +56,19 @@ public class WebuiStartup implements ServletContextListener {
      * @param event The servlet context event at initialization.
      */
     public void contextInitialized(ServletContextEvent event) {
-        GlobalTracer.register(Tracing.init(Service.WEBUI.getServiceName()));
-    	ServiceLoadBalancer.preInitializeServiceLoadBalancers(Service.AUTH, Service.IMAGE,
+//        GlobalTracer.register(Tracing.init(Service.WEBUI.getServiceName()));
+		try {
+			TraceExporter traceExporter = TraceExporter.createWithDefaultConfiguration();
+			OpenTelemetrySdk.builder()
+					.setTracerProvider(
+							SdkTracerProvider.builder()
+									.addSpanProcessor(BatchSpanProcessor.builder(traceExporter).build())
+									.build())
+					.buildAndRegisterGlobal();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+		ServiceLoadBalancer.preInitializeServiceLoadBalancers(Service.AUTH, Service.IMAGE,
     			Service.PERSISTENCE, Service.RECOMMENDER);
     	RegistryClient.getClient().register(event.getServletContext().getContextPath());
     }
